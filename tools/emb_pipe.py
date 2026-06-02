@@ -1,7 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
 import chromadb
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 class DocumentEmbedder:
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
@@ -28,6 +28,27 @@ class DocumentEmbedder:
 
         return len(docs)
     
+    def embed_documents_with_ids(self, documents: List[Dict], collection_name: str, ids: Optional[List[str]] = None):
+        docs = [doc["content"] for doc in documents]
+        metas = [doc.get("metadata", {}) for doc in documents]
+        
+        if ids is None:
+            ids = [f"doc_{i}" for i in range(len(documents))]
+
+        embed_docs = self.model.encode(docs).tolist()
+
+        collection = self.client.get_or_create_collection(collection_name)
+        collection.add(
+            documents=docs,
+            metadatas=metas,
+            ids=ids,
+            embeddings=embed_docs
+        )
+
+        self.collections[collection_name] = collection
+
+        return len(docs)
+    
     def embed_query(self, query: str) -> List[float]:
         return self.model.encode([query])[0].tolist()
     
@@ -38,3 +59,16 @@ class DocumentEmbedder:
             n_results=3
         )
         return results
+    
+    def delete_collection(self, collection_name: str):
+        try:
+            self.client.delete_collection(collection_name)
+            if collection_name in self.collections:
+                del self.collections[collection_name]
+            return True
+        except Exception as e:
+            return False
+    
+    def clear_and_rebuild(self, documents: List[Dict], collection_name: str):
+        self.delete_collection(collection_name)
+        return self.embed_documents(documents, collection_name)

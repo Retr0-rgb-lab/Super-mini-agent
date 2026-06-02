@@ -42,5 +42,47 @@
                 "required": ["principal", "target_value"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_financial_report",
+            "description": "在本地金融知识库中检索财报、研报等私有文档的相关内容。当用户询问具体财务数据、公司信息时使用此工具。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "用户的问题或关键词，如'茅台2023年净利润'、'五粮液营收增长率'"
+                    },
+                    "top_k": {
+                        "type": "number",
+                        "description": "返回相关文档数量，默认3，最大10"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "搜索互联网获取最新信息。当用户询问实时新闻、股价、天气预报或需要最新数据时使用。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "搜索关键词，如'茅台股票实时价格'、'最新AI新闻'"
+                    },
+                    "num_results": {
+                        "type": "number",
+                        "description": "返回结果数量，默认5"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]

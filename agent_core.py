@@ -4,13 +4,13 @@ load_dotenv()
 import os
 import json
 from enum import Enum
+import sys
+sys.path.insert(0, 'E:/Finance_AI/agent_project/practice/supermini_agent')
+
+from tools import get_current_price, get_historical_data, calculate_investment_return, init_rag_tools, lookup_financial_report, WebSearcher
 
 with open('E:/Finance_AI/agent_project/practice/supermini_agent/tools.json', 'r', encoding='utf-8') as f:
     tools = json.load(f)
-
-import sys
-sys.path.insert(0, 'E:/Finance_AI/agent_project/practice/supermini_agent/functions.py')
-from function import get_current_price, get_historical_data, calculate_investment_return
 
 client = OpenAI(
     api_key=os.getenv("API_KEY"),
@@ -30,6 +30,7 @@ class Agent:
         self.tools = tools
         self.state = AgentState.IDLE
         self.steps = []
+        init_rag_tools()
 
     def call_llm(self):
         response = client.chat.completions.create(
@@ -47,6 +48,11 @@ class Agent:
             return get_historical_data(**args)
         elif name == "calculate_investment_return":
             return calculate_investment_return(**args)
+        elif name == "lookup_financial_report":
+            return lookup_financial_report(**args)
+        elif name == "web_search":
+            searcher = WebSearcher()
+            return searcher.search_with_context(**args)
         else:
             return f"Unknown tool: {name}"
         
@@ -65,7 +71,6 @@ class Agent:
             if msg.tool_calls:
                 self.state = AgentState.ACTING
                 for tool_call in msg.tool_calls:
-                    #执行
                     args = json.loads(tool_call.function.arguments)
                     function_name = tool_call.function.name
                     print(f"[行动] 调用工具: {function_name}, 参数: {args}")

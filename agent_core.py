@@ -7,7 +7,17 @@ from enum import Enum
 import sys
 sys.path.insert(0, 'E:/Finance_AI/agent_project/practice/supermini_agent')
 
-from tools import get_current_price, get_historical_data, calculate_investment_return, init_rag_tools, lookup_financial_report, WebSearcher
+from tools import (
+    get_current_price, 
+    get_historical_data, 
+    calculate_investment_return, 
+    init_rag_tools, 
+    lookup_financial_report, 
+    WebSearcher, 
+    CitationValidator, 
+    answer_with_citations,
+    retrieve_structured,
+)
 
 with open('E:/Finance_AI/agent_project/practice/supermini_agent/tools.json', 'r', encoding='utf-8') as f:
     tools = json.load(f)
@@ -25,13 +35,14 @@ class AgentState(Enum):
     FAILED = "failed"
 
 class Agent:
-    def __init__(self, system_prompt):
+    def __init__(self, system_prompt: str):
         self.messages = [{"role": "system", "content": f"{system_prompt}"}]
         self.tools = tools
         self.state = AgentState.IDLE
         self.steps = []
+        self._retrieved_docs = []
         init_rag_tools()
-
+        
     def call_llm(self):
         response = client.chat.completions.create(
                 model="MiniMax-M2.7",
@@ -49,17 +60,33 @@ class Agent:
         elif name == "calculate_investment_return":
             return calculate_investment_return(**args)
         elif name == "lookup_financial_report":
-            return lookup_financial_report(**args)
+            result = lookup_financial_report(**args)          
+            self._retrieved_docs = retrieve_structured(args.get("query", ""), args.get("top_k", 3))
+            return result
         elif name == "web_search":
             searcher = WebSearcher()
             return searcher.search_with_context(**args)
         else:
             return f"Unknown tool: {name}"
         
-    def chat(self, user_input, max_iters = 15):
-        self.messages.append({"role": "user", "content": f"{user_input}"})
+    def _format_answer(self, answer: str) -> str:
+        if not self.use_citations or not self._retrieved_docs:
+            return answer
+        
+        validator = CitationValidator(self._retrieved_docs)
+        validation = validator.validate(answer)
+        
+        if not validation["valid"]:
+            answer += f"\n\n警告：{validation['issues'][0]}"
+        
+        return answer_with_citations(answer, self._retrieved_docs)
+    
+    def chat(self, user_input: str, max_iters: int = 15) -> str:
+        self.messages.append({"role": "user", "content": user_input})
         self.steps = []
         self.state = AgentState.THINKING
+        init_rag_tools()
+        self._retrieved_docs = []
 
         for i in range(max_iters):
             print(f"\n=== Step {i+1} ===")
@@ -76,12 +103,15 @@ class Agent:
                     print(f"[行动] 调用工具: {function_name}, 参数: {args}")
 
                     result = self.execute_tool(function_name, args)
-                    print(f"[观察] 结果: {result}")
+                    result_str = str(result)
+                    if len(result_str) > 200:
+                        result_str = result_str[:200] + "..."
+                    print(f"[观察] 结果: {result_str}")
 
                     self.messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": str(result)
+                        "content": result_str
                     })
 
                     self.steps.append({
@@ -92,9 +122,13 @@ class Agent:
 
             else:
                 self.state = AgentState.DONE
-                return msg.content
-        
+                answer = msg.content
+                answer = self._format_answer(answer)
+                self._retrieved_docs = []
+                return answer
+
         self.state = AgentState.FAILED
+        self._retrieved_docs = []
         return "已达到最大对话轮次"
     
     def get_execution_trace(self):

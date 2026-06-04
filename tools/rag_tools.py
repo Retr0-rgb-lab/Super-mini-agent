@@ -1,5 +1,5 @@
 from .retrieval_pipeline import RetrievalPipeline
-from typing import Union
+from typing import Union, List, Dict
 
 _pipeline: Union[RetrievalPipeline, None] = None
 
@@ -26,3 +26,8 @@ def lookup_financial_report(query: str, top_k: int = 3) -> str:
     footer = "\n\n请基于以上信息回答用户问题。如果信息不足，可以结合通用知识补充。"
     
     return header + "\n\n".join(context_parts) + footer
+
+def retrieve_structured(query: str, top_k: int = 3) -> List[Dict]:
+    if _pipeline is None:
+        return []
+    return _pipeline.retrieve(query)
